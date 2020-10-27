@@ -58,25 +58,25 @@
   }
 
 
-  $: Time_to_death     = 32
-  $: logN              = Math.log(7e6)
+  $: Time_to_death     = 21
+  $: logN              = Math.log(10500000)
   $: N                 = Math.exp(logN)
   $: I0                = 1
-  $: R0                = 2.2
+  $: R0                = 1.4
   $: D_incbation       = 5.2       
   $: D_infectious      = 2.9 
-  $: D_recovery_mild   = (14 - 2.9)  
-  $: D_recovery_severe = (31.5 - 2.9)
+  $: D_recovery_mild   = (10 - 2.9)  
+  $: D_recovery_severe = (10 - 2.9)
   $: D_hospital_lag    = 5
   $: D_death           = Time_to_death - D_infectious 
-  $: CFR               = 0.02  
-  $: InterventionTime  = 100  
+  $: CFR               = 0.008  
+  $: InterventionTime  = 21  
   $: OMInterventionAmt = 2/3
   $: InterventionAmt   = 1 - OMInterventionAmt
   $: Time              = 220
   $: Xmax              = 110000
-  $: dt                = 2
-  $: P_SEVERE          = 0.2
+  $: dt                = 1
+  $: P_SEVERE          = 0.04
   $: duration          = 7*12*1e10
 
   $: state = location.protocol + '//' + location.host + location.pathname + "?" + queryString.stringify({"Time_to_death":Time_to_death,
@@ -98,11 +98,16 @@
   function get_solution(dt, N, I0, R0, D_incbation, D_infectious, D_recovery_mild, D_hospital_lag, D_recovery_severe, D_death, P_SEVERE, CFR, InterventionTime, InterventionAmt, duration) {
 
     var interpolation_steps = 40
-    var steps = 110*interpolation_steps
+    var steps = 100*interpolation_steps
     var dt = dt/interpolation_steps
     var sample_step = interpolation_steps
 
     var method = Integrators["RK4"]
+
+    var startSimulationAtDeaths = 100
+
+    InterventionTime = 1000
+
     function f(t, x){
 
       // SEIR ODE
@@ -146,25 +151,64 @@
       return [dS, dE, dI, dMild, dSevere, dSevere_H, dFatal, dR_Mild, dR_Severe, dR_Fatal]
     }
 
+
+    
+    var initial_v = [1 - I0/N, 0, I0/N, 0, 0, 0, 0, 0, 0, 0]
+    var initial_t = 0
+    var start_t = 0
+
+    var initial_steps = steps * 10
+    while (initial_steps--) { 
+      if ((initial_steps+1) % (sample_step) == 0) {
+        var d_v = f(initial_t, initial_v)            
+        if (N*d_v[9] > startSimulationAtDeaths)
+        {       
+          start_t = initial_t - (D_death + D_infectious)
+          InterventionTime = initial_t
+          console.log('start_t', start_t, (N*d_v[9]))
+          console.log('InterventionTime', InterventionTime)
+          break
+        }
+        
+        // console.log((v[0] + v[1] + v[2] + v[3] + v[4] + v[5] + v[6] + v[7] + v[8] + v[9]))
+        // console.log(v[0] , v[1] , v[2] , v[3] , v[4] , v[5] , v[6] , v[7] , v[8] , v[9])
+      }
+      initial_v =integrate(method,f,initial_v, initial_t,dt); 
+      initial_t+=dt
+    }
+
+
     var v = [1 - I0/N, 0, I0/N, 0, 0, 0, 0, 0, 0, 0]
     var t = 0
 
     var P  = []
+    var chart_P = []
     var TI = []
     var Iters = []
+    steps += Math.floor(start_t / dt)
+
     while (steps--) { 
       if ((steps+1) % (sample_step) == 0) {
             //    Dead   Hospital          Recovered        Infectious   Exposed
-        P.push([ N*v[9], N*(v[5]+v[6]),  N*(v[7] + v[8]), N*v[2],    N*v[1] ])
-        Iters.push(v)
-        TI.push(N*(1-v[0]))
+        if (t > start_t)
+        {
+          P.push([ N*v[9], N*(v[5]+v[6]),  N*(v[7] + v[8]), N*v[2],    N*v[1] ])
+          chart_P.push([ N*v[9], N*(v[5]+v[6]),  N*(v[7] + v[8]), N*v[2],    N*v[1] ])
+          //chart_P.push([ N*v[9], N*(v[5]+v[6]),   -N*v[0] ])
+          //console.log()
+          Iters.push(v)
+          TI.push(N*(1-v[0]))
+        }
         // console.log((v[0] + v[1] + v[2] + v[3] + v[4] + v[5] + v[6] + v[7] + v[8] + v[9]))
         // console.log(v[0] , v[1] , v[2] , v[3] , v[4] , v[5] , v[6] , v[7] , v[8] , v[9])
       }
       v =integrate(method,f,v,t,dt); 
       t+=dt
     }
+
+
     return {"P": P, 
+            "chart_P": chart_P, 
             "deaths": N*v[6], 
             "total": 1-v[0],
             "total_infected": TI,
@@ -178,6 +222,7 @@
 
   $: Sol            = get_solution(dt, N, I0, R0, D_incbation, D_infectious, D_recovery_mild, D_hospital_lag, D_recovery_severe, D_death, P_SEVERE, CFR, InterventionTime, InterventionAmt, duration)
   $: P              = Sol["P"].slice(0,100)
+  $: chart_P        = Sol["chart_P"].slice(0,100)
   $: timestep       = dt
   $: tmax           = dt*100
   $: deaths         = Sol["deaths"]
@@ -185,7 +230,7 @@
   $: total_infected = Sol["total_infected"].slice(0,100)
   $: Iters          = Sol["Iters"]
   $: dIters         = Sol["dIters"]
-  $: Pmax           = max(P, checked)
+  $: Pmax           = max(chart_P, checked)
   $: lock           = false
 
   var colors = [ "#386cb0", "#8da0cb", "#4daf4a", "#f0027f", "#fdc086"]
@@ -332,7 +377,7 @@
 
   $: indexToTime = scaleLinear()
     .domain([0, P.length])
-    .range([0, tmax])
+    .range([-25, tmax])
 
   window.addEventListener('mouseup', unlock_yaxis);
 
@@ -663,7 +708,7 @@
       </div>
 
       <!-- Removed -->
-      <div style="position:absolute; left:0px; top:{legendheight*3}px; width: 180px; height: 100px">
+     <!-- <div style="position:absolute; left:0px; top:{legendheight*3}px; width: 180px; height: 100px">
 
         <Checkbox color="grey" callback={(s) => {checked[1] = s; checked[0] = s; checked[2] = s} }/>
         <Arrow height="56" arrowhead="" dasharray="3 2"/>
@@ -679,12 +724,12 @@
         </div>
         <div class="legendtext" style="text-align: right; width:105px; left:-111px; top: 4x; position:relative;">Population no longer infectious due to isolation or immunity.</div>
 
-      </div>
+      </div> -->
 
       <!-- Recovered -->
-      <div style="position:absolute; left:0px; top:{legendheight*4+14-3}px; width: 180px; height: 100px">
+      <div style="position:absolute; left:0px; top:{legendheight*3}px; width: 180px; height: 100px">
         <Checkbox color="{colors[2]}" bind:checked={checked[2]}/>
-        <Arrow height="23" arrowhead="" dasharray="3 2"/>
+        <!--<Arrow height="23" arrowhead="" dasharray="3 2"/>-->
         <div class="legend" style="position:absolute;">
           <div class="legendtitle">Recovered</div>
 
@@ -738,7 +783,7 @@
     <div style="position:relative; top:60px; left: 10px">
       <Chart bind:checked={checked}
              bind:active={active}
-             y = {P} 
+             y = {chart_P} 
              xmax = {Xmax} 
              total_infected = {total_infected} 
              deaths = {deaths} 

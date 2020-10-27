@@ -51,7 +51,7 @@
     .range([padding.left, width - padding.right]);
 
   $: xScaleTime = scaleLinear()
-    .domain([0, tmax])
+    .domain([-25, tmax])
     .range([padding.left, width - padding.right]);
 
   $: indexToTime = scaleLinear()
@@ -198,7 +198,7 @@
     <g class="axis x-axis">
       {#each xScaleTime.ticks() as i}
         <g class="tick" transform="translate({xScaleTime(i)},{height})">
-          <text x="0" y="-4">{i == 0 ? "Day ":""}{i}</text>
+          <text x="0" y="-4">{i == 0 ? "Den ":""}{i}</text>
         </g>
       {/each}
     </g>

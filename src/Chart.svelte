@@ -40,6 +40,7 @@
   export let InterventionTime;
   export let colors; 
   export let log = false;
+  export let show_capacity = false;
 
   const padding = { top: 20, right: 0, bottom: 20, left: 25 };
 
@@ -196,7 +197,7 @@
     <!-- y axis -->
     <g class="axis y-axis" transform="translate(0,{padding.top})">
       {#each yScale.ticks(5) as tick}
-        {#if tick == 10000}
+        {#if tick == 10000 && show_capacity}
           <g class="tick tick-{tick} tick-limit" transform="translate(0, {yScale(tick) - padding.bottom})">
             <line x2="100%"></line>
             <text y="-18">Kapacita nemocnic</text>

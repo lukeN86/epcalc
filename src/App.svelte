@@ -16,6 +16,8 @@
 
   const legendheight = 67 
 
+  const legendheight_hosp = 40 
+
   function range(n){
     return Array(n).fill().map((_, i) => i);
   }
@@ -71,11 +73,11 @@
   $: D_death           = Time_to_death - D_infectious 
   $: CFR               = 0.008  
   $: InterventionTime  = 21  
-  $: OMInterventionAmt = 2/3
+  $: OMInterventionAmt = 0.4
   $: InterventionAmt   = 1 - OMInterventionAmt
   $: Time              = 220
   $: Xmax              = 110000
-  $: dt                = 1
+  $: dt                = 2
   $: P_SEVERE          = 0.04
   $: duration          = 7*12*1e10
 
@@ -146,14 +148,15 @@
       var dR_Mild   =  (1/D_recovery_mild)*Mild
       var dR_Severe =  (1/D_recovery_severe)*Severe_H
       var dR_Fatal  =  (1/D_death)*Fatal
+      var dI_abs    =  a*E
 
-      //      0   1   2   3      4        5          6       7        8          9
-      return [dS, dE, dI, dMild, dSevere, dSevere_H, dFatal, dR_Mild, dR_Severe, dR_Fatal]
+      //      0   1   2   3      4        5          6       7        8          9         10
+      return [dS, dE, dI, dMild, dSevere, dSevere_H, dFatal, dR_Mild, dR_Severe, dR_Fatal, dI_abs]
     }
 
 
     
-    var initial_v = [1 - I0/N, 0, I0/N, 0, 0, 0, 0, 0, 0, 0]
+    var initial_v = [1 - I0/N, 0, I0/N, 0, 0, 0, 0, 0, 0, 0, 0]
     var initial_t = 0
     var start_t = 0
 
@@ -165,8 +168,8 @@
         {       
           start_t = initial_t - (D_death + D_infectious)
           InterventionTime = initial_t
-          console.log('start_t', start_t, (N*d_v[9]))
-          console.log('InterventionTime', InterventionTime)
+          //console.log('start_t', start_t, (N*d_v[9]))
+          //console.log('InterventionTime', InterventionTime)
           break
         }
         
@@ -178,27 +181,45 @@
     }
 
 
-    var v = [1 - I0/N, 0, I0/N, 0, 0, 0, 0, 0, 0, 0]
+    var v = [1 - I0/N, 0, I0/N, 0, 0, 0, 0, 0, 0, 0, 0]
     var t = 0
 
     var P  = []
     var chart_P = []
+    var chart_Hosp = []
     var TI = []
     var Iters = []
     steps += Math.floor(start_t / dt)
 
+    //Age distribution of hospitalized patients in percents, taken from UZIS data 17.10.2020
+    var age_distribution_hospitalized = [1.14, 2.7, 3.87, 8.85, 11.39, 18.12, 14.68, 14.55, 11.41, 13.28]
+
+    var prevInfectious = 0
     while (steps--) { 
       if ((steps+1) % (sample_step) == 0) {
             //    Dead   Hospital          Recovered        Infectious   Exposed
         if (t > start_t)
         {
           P.push([ N*v[9], N*(v[5]+v[6]),  N*(v[7] + v[8]), N*v[2],    N*v[1] ])
-          chart_P.push([ N*v[9], N*(v[5]+v[6]),  N*(v[7] + v[8]), N*v[2],    N*v[1] ])
-          //chart_P.push([ N*v[9], N*(v[5]+v[6]),   -N*v[0] ])
-          //console.log()
+          chart_P.push([ N*v[9], N*(v[5]+v[6]),  N*(v[7] + v[8]), v[10]*N - prevInfectious,    N*v[1] ])
+          //console.log(v[10]*N)
+
+          var hosp = N*(v[5]+v[6])
+          var hosp_by_age = []
+          for (var i=0; i < age_distribution_hospitalized.length; i++)
+          {
+            hosp_by_age.push(age_distribution_hospitalized[i] / 100.0 * hosp)    
+          }
+          console.log(hosp_by_age)
+          chart_Hosp.push(hosp_by_age)
+
+                    
           Iters.push(v)
           TI.push(N*(1-v[0]))
+          
         }
+        
+        prevInfectious =  v[10]*N
         // console.log((v[0] + v[1] + v[2] + v[3] + v[4] + v[5] + v[6] + v[7] + v[8] + v[9]))
         // console.log(v[0] , v[1] , v[2] , v[3] , v[4] , v[5] , v[6] , v[7] , v[8] , v[9])
       }
@@ -209,6 +230,7 @@
 
     return {"P": P, 
             "chart_P": chart_P, 
+            "chart_Hosp": chart_Hosp, 
             "deaths": N*v[6], 
             "total": 1-v[0],
             "total_infected": TI,
@@ -223,17 +245,21 @@
   $: Sol            = get_solution(dt, N, I0, R0, D_incbation, D_infectious, D_recovery_mild, D_hospital_lag, D_recovery_severe, D_death, P_SEVERE, CFR, InterventionTime, InterventionAmt, duration)
   $: P              = Sol["P"].slice(0,100)
   $: chart_P        = Sol["chart_P"].slice(0,100)
+  $: chart_Hosp     = Sol["chart_Hosp"].slice(0,100)
   $: timestep       = dt
   $: tmax           = dt*100
   $: deaths         = Sol["deaths"]
   $: total          = Sol["total"]
   $: total_infected = Sol["total_infected"].slice(0,100)
-  $: Iters          = Sol["Iters"]
+  $: Iters          = Sol["Iters"]  
   $: dIters         = Sol["dIters"]
   $: Pmax           = max(chart_P, checked)
+  $: Hospmax        = 40000
   $: lock           = false
 
   var colors = [ "#386cb0", "#8da0cb", "#4daf4a", "#f0027f", "#fdc086"]
+  
+  var colors_hosp = ["#f6fedb","#e6d3a3","#d8d174","#b6c454","#91972a","#7f7caf","#28587b","#644536","#b2675e","#ef6f6c"]
 
   var Plock = 1
 
@@ -384,6 +410,10 @@
   $: checked = [true, true, false, true, true]
   $: active  = 0
   $: active_ = active >= 0 ? active : Iters.length - 1
+
+  $: checked_hosp = [true, true, true, true, true, true, true, true, true, true, true]
+  $: active_hosp  = 0
+  $: active_hosp_ = active_hosp >= 0 ? active_hosp : chart_Hosp.length - 1
 
   var Tinc_s = "\\color{#CCC}{T^{-1}_{\\text{inc}}} "
   var Tinf_s = "\\color{#CCC}{T^{-1}_{\\text{inf}}}"
@@ -888,60 +918,12 @@
               </div>
               <div style="pointer-events: all">
               <div class="slidertext" on:mousedown={lock_yaxis}>{(100*(1-InterventionAmt)).toFixed(2)}%</div>
-              <input class="range" type=range bind:value={OMInterventionAmt} min=0 max=1 step=0.01 on:mousedown={lock_yaxis}>
+              <input class="range" type=range bind:value={OMInterventionAmt} min=-0.5 max=0.5 step=0.01 on:mousedown={lock_yaxis}>
               </div>
               </div>
             </div>
           </div>
       </div>
-
-<!-- 
-      {#if xScaleTime(InterventionTime+duration) < (width - padding.right)}
-        <div id="dottedline2" style="position: absolute; width:{width+15}px; height: {height}px; position: absolute; top:105px; left:10px; pointer-events: none;">
-          <div style="
-              position: absolute;
-              top:-38px;
-              left:{xScaleTime(InterventionTime+duration)}px;
-              visibility: {(xScaleTime(InterventionTime+duration) < (width - padding.right)) ? 'visible':'hidden'};
-              width:3px;
-              background-color:white;
-              border-right: 1px dashed black;
-              cursor:col-resize;
-              opacity: 0.3;
-              pointer-events: all;
-              height:{height+13}px">
-            <div style="position:absolute; opacity: 0.5; top:-10px; left:10px; width: 120px">
-            <span style="font-size: 13px">{@html math_inline("\\mathcal{R}_t=" + (R0*InterventionAmt).toFixed(2) )}</span> ⟶ 
-            </div>
-          </div>
-        </div>
-
-        <div style="position: absolute; width:{width+15}px; height: {height}px; position: absolute; top:120px; left:10px; pointer-events: none">
-          <div style="
-              opacity: 0.5;
-              position: absolute;
-              top:-38px;
-              left:{xScaleTime(InterventionTime+duration)}px;
-              visibility: {(xScaleTime(InterventionTime+duration) < (width - padding.right)) ? 'visible':'hidden'};
-              width:2px;
-              background-color:#FFF;
-              cursor:col-resize;
-              height:{height}px">
-              <div style="flex: 0 0 160px; width:200px; position:relative; top:-125px; left: 1px" >
-                <div class="caption" style="pointer-events: none; position: absolute; left:0; top:40px; width:150px; border-left: 2px solid #777; padding: 5px 7px 7px 7px; ">      
-                <div class="paneltext"  style="height:20px; text-align: right">
-                <div class="paneldesc">decrease transmission by<br></div>
-                </div>
-                <div style="pointer-events: all">
-                <div class="slidertext" on:mousedown={lock_yaxis}>{(InterventionAmt).toFixed(2)}</div>
-                <input class="range" type=range bind:value={InterventionAmt} min=0 max=1 step=0.01 on:mousedown={lock_yaxis}>
-                </div>
-                </div>
-              </div>
-            </div>
-        </div>
-      {/if} -->
-
 
       <div style="pointer-events: none;
                   position: absolute;
@@ -957,13 +939,241 @@
                   <div class="tick" style="position: relative; left: 0px; top: 35px; max-width: 130px; color: #BBB; background-color: white; padding-left: 4px; padding-right: 4px">{@html milestone[1]}</div>
               </div>
             {/each}
+      </div>       
+
+   </div>
+
+</div>
+
+<div class="chart" style="display: flex; max-width: 1120px">
+
+  <div style="flex: 0 0 270px; width:270px;">
+    <div style="position:relative; top:48px; right:-115px">
+      <div class="legendtext" style="position:absolute; left:-16px; top:-34px; width:50px; height: 100px; font-size: 13px; line-height:16px; font-weight: normal; text-align: center"><b>Den</b><br> {Math.round(indexToTime(active_hosp_))}</div>
+      
+      <div style="position:absolute; left:0px; top:0px; width: 180px; height: 100px">
+        <Checkbox color="{colors_hosp[0]}" bind:checked={checked_hosp[0]}/>
+        <div class="legend" style="position:absolute;">          
+          <div class="legendtitle">0-17 let</div>
+          <div style="padding-top: 1px; padding-bottom: 5px">
+          <div class="legendtextnum"><i>{formatNumber(Math.round(chart_Hosp[active_hosp_][0]))} ({ (100*chart_Hosp[active_hosp_][0] / sum(chart_Hosp[active_hosp_], checked_hosp) ).toFixed(2) }%) </i></div>          
+          </div>
+        </div>          
       </div>
-    
-    <div style="opacity:{xScaleTime(InterventionTime) >= 192? 1.0 : 0.2}">
-      <div class="tick" style="color: #AAA; position:absolute; pointer-events:all; left:10px; top: 10px">
-        <Checkbox color="#CCC" bind:checked={log}/><div style="position: relative; top: 4px; left:20px">linear scale</div>
+      <div style="position:absolute; left:0px; top:{legendheight_hosp*1}px; width: 180px; height: 100px">
+        <Checkbox color="{colors_hosp[1]}" bind:checked={checked_hosp[1]}/>
+        <div class="legend" style="position:absolute;">          
+          <div class="legendtitle">18-29 let</div>
+          <div style="padding-top: 1px; padding-bottom: 5px">
+          <div class="legendtextnum"><i>{formatNumber(Math.round(chart_Hosp[active_hosp_][1]))} ({ (100*chart_Hosp[active_hosp_][1] / sum(chart_Hosp[active_hosp_], checked_hosp) ).toFixed(2) }%) </i></div>          
+          </div>
+        </div>          
       </div>
+      <div style="position:absolute; left:0px; top:{legendheight_hosp*2}px; width: 180px; height: 100px">
+        <Checkbox color="{colors_hosp[2]}" bind:checked={checked_hosp[2]}/>
+        <div class="legend" style="position:absolute;">          
+          <div class="legendtitle">30-39 let</div>
+          <div style="padding-top: 1px; padding-bottom:5px">
+          <div class="legendtextnum"><i>{formatNumber(Math.round(chart_Hosp[active_hosp_][2]))} ({ (100*chart_Hosp[active_hosp_][2] / sum(chart_Hosp[active_hosp_], checked_hosp) ).toFixed(2) }%) </i></div>          
+          </div>
+        </div>          
+      </div>
+      <div style="position:absolute; left:0px; top:{legendheight_hosp*3}px; width: 180px; height: 100px">
+        <Checkbox color="{colors_hosp[3]}" bind:checked={checked_hosp[3]}/>
+        <div class="legend" style="position:absolute;">          
+          <div class="legendtitle">40-49 let</div>
+          <div style="padding-top: 1px; padding-bottom: 5px">
+          <div class="legendtextnum"><i>{formatNumber(Math.round(chart_Hosp[active_hosp_][3]))} ({ (100*chart_Hosp[active_hosp_][3] / sum(chart_Hosp[active_hosp_], checked_hosp) ).toFixed(2) }%) </i></div>          
+          </div>
+        </div>          
+      </div>
+      <div style="position:absolute; left:0px; top:{legendheight_hosp*4}px; width: 180px; height: 100px">
+        <Checkbox color="{colors_hosp[4]}" bind:checked={checked_hosp[4]}/>
+        <div class="legend" style="position:absolute;">          
+          <div class="legendtitle">50-59 let</div>
+          <div style="padding-top: 1px; padding-bottom: 5px">
+          <div class="legendtextnum"><i>{formatNumber(Math.round(chart_Hosp[active_hosp_][4]))} ({ (100*chart_Hosp[active_hosp_][4] / sum(chart_Hosp[active_hosp_], checked_hosp) ).toFixed(2) }%) </i></div>          
+          </div>
+        </div>          
+      </div>
+      <div style="position:absolute; left:0px; top:{legendheight_hosp*5}px; width: 180px; height: 100px">
+        <Checkbox color="{colors_hosp[5]}" bind:checked={checked_hosp[5]}/>
+        <div class="legend" style="position:absolute;">          
+          <div class="legendtitle">60-69 let</div>
+          <div style="padding-top: 1px; padding-bottom: 5px">
+          <div class="legendtextnum"><i>{formatNumber(Math.round(chart_Hosp[active_hosp_][5]))} ({ (100*chart_Hosp[active_hosp_][5] / sum(chart_Hosp[active_hosp_], checked_hosp) ).toFixed(2) }%) </i></div>          
+          </div>
+        </div>          
+      </div>
+      <div style="position:absolute; left:0px; top:{legendheight_hosp*6}px; width: 180px; height: 100px">
+        <Checkbox color="{colors_hosp[6]}" bind:checked={checked_hosp[6]}/>
+        <div class="legend" style="position:absolute;">          
+          <div class="legendtitle">70-74 let</div>
+          <div style="padding-top: 1px; padding-bottom: 5px">
+          <div class="legendtextnum"><i>{formatNumber(Math.round(chart_Hosp[active_hosp_][6]))} ({ (100*chart_Hosp[active_hosp_][6] / sum(chart_Hosp[active_hosp_], checked_hosp) ).toFixed(2) }%) </i></div>          
+          </div>
+        </div>          
+      </div>
+      <div style="position:absolute; left:0px; top:{legendheight_hosp*7}px; width: 180px; height: 100px">
+        <Checkbox color="{colors_hosp[7]}" bind:checked={checked_hosp[7]}/>
+        <div class="legend" style="position:absolute;">          
+          <div class="legendtitle">75-79 let</div>
+          <div style="padding-top: 1px; padding-bottom: 5px">
+          <div class="legendtextnum"><i>{formatNumber(Math.round(chart_Hosp[active_hosp_][7]))} ({ (100*chart_Hosp[active_hosp_][7] / sum(chart_Hosp[active_hosp_], checked_hosp) ).toFixed(2) }%) </i></div>          
+          </div>
+        </div>          
+      </div>
+      <div style="position:absolute; left:0px; top:{legendheight_hosp*8}px; width: 180px; height: 100px">
+        <Checkbox color="{colors_hosp[8]}" bind:checked={checked_hosp[8]}/>
+        <div class="legend" style="position:absolute;">          
+          <div class="legendtitle">79-84 let</div>
+          <div style="padding-top: 1px; padding-bottom: 5px">
+          <div class="legendtextnum"><i>{formatNumber(Math.round(chart_Hosp[active_hosp_][8]))} ({ (100*chart_Hosp[active_hosp_][8] / sum(chart_Hosp[active_hosp_], checked_hosp) ).toFixed(2) }%) </i></div>          
+          </div>
+        </div>          
+      </div>
+      <div style="position:absolute; left:0px; top:{legendheight_hosp*9}px; width: 180px; height: 100px">
+        <Checkbox color="{colors_hosp[9]}" bind:checked={checked_hosp[9]}/>
+        <div class="legend" style="position:absolute;">          
+          <div class="legendtitle">85+  let</div>
+          <div style="padding-top: 1px; padding-bottom: 5px">
+          <div class="legendtextnum"><i>{formatNumber(Math.round(chart_Hosp[active_hosp_][9]))} ({ (100*chart_Hosp[active_hosp_][9] / sum(chart_Hosp[active_hosp_], checked_hosp) ).toFixed(2) }%) </i></div>          
+          </div>
+        </div>          
+      </div>      
+
+      <div style="position:absolute; left:0px; top:{legendheight_hosp*10+10}px; width: 180px; height: 100px">   
+        <div class="legend" style="position:absolute;">          
+          <div class="legendtitle">Celkem</div>
+          <div style="padding-top: 1px; padding-bottom: 5px">
+          <div class="legendtextnum"><i>{formatNumber(Math.round(sum(chart_Hosp[active_hosp_], checked_hosp)))}  </i></div>          
+          </div>
+        </div>          
+      </div>    
+      
     </div>
+  </div>
+  <div style="flex: 0 0 890px; width:890px; height: {height+128}px; position:relative;">
+
+    <div style="position:relative; top:60px; left: 10px">
+      <Chart bind:checked={checked_hosp}
+             bind:active={active_hosp}
+             y = {chart_Hosp} 
+             xmax = {Xmax} 
+             total_infected = {total_infected} 
+             deaths = {deaths} 
+             total = {total} 
+             timestep={timestep}
+             tmax={tmax}
+             N={N}
+             ymax={lock ? Plock: Hospmax}
+             InterventionTime={InterventionTime}
+             colors={colors_hosp}
+             log={!log}/>
+      </div>
+
+      <div id="xAxisDrag"
+           style="pointer-events: all;
+                  position: absolute;
+                  top:{height+80}px;
+                  left:{0}px;
+                  width:{780}px;
+                  background-color:#222;
+                  opacity: 0;
+                  height:25px;
+                  cursor:col-resize">
+      </div>
+
+      <div id="yAxisDrag"
+           style="pointer-events: all;
+                  position: absolute;
+                  top:{55}px;
+                  left:{0}px;
+                  width:{20}px;
+                  background-color:#222;
+                  opacity: 0;
+                  height:425px;
+                  cursor:row-resize">
+      </div>
+
+      <!-- Intervention Line -->
+      <div style="position: absolute; width:{width+15}px; height: {height}px; position: absolute; top:100px; left:10px; pointer-events: none">
+        <div id="dottedline"  style="pointer-events: all;
+                    position: absolute;
+                    top:-38px;
+                    left:{xScaleTime(InterventionTime)}px;
+                    visibility: {(xScaleTime(InterventionTime) < (width - padding.right)) ? 'visible':'hidden'};
+                    width:2px;
+                    background-color:#FFF;
+                    border-right: 1px dashed black;
+                    pointer-events: all;
+                    cursor:col-resize;
+                    height:{height+19}px">
+
+        <div style="position:absolute; opacity: 0.5; top:-5px; left:10px; width: 120px">
+        <span style="font-size: 13px">{@html math_inline("\\mathcal{R}_t=" + (R0*InterventionAmt).toFixed(2) )}</span> ⟶ 
+        </div>
+
+        {#if xScaleTime(InterventionTime) >= 100}
+          <div style="position:absolute; opacity: 0.5; top:-2px; left:-97px; width: 120px">
+          <span style="font-size: 13px">⟵ {@html math_inline("\\mathcal{R}_0=" + (R0).toFixed(2) )}</span>
+          </div>      
+        {/if}
+
+       
+
+        <div style="width:150px; position:relative; top:-85px; height: 80px; padding-right: 15px; left: 0px; ;cursor:col-resize; background-color: white; position:absolute" >
+
+        </div>
+
+
+        </div>
+      </div>
+
+      <!-- Capacity Line -->
+      <div style="position: absolute; width:600px; height: {height}px; position: absolute; top:100px; left:10px; pointer-events: none">
+        <div  style="pointer-events: all;
+                    position: absolute;
+                    top:38px;                    
+                    width:{width+15};
+                    visibility: visible:
+                    background-color:#FFF;
+                    border-top: 1px dashed red;
+                    pointer-events: all;                    
+                    height:2px"> 
+        </div>
+      </div>
+
+      <!-- Intervention Line slider -->
+      <div style="position: absolute; width:{width+15}px; height: {height}px; position: absolute; top:120px; left:10px; pointer-events: none">
+        <div style="
+            position: absolute;
+            top:-38px;
+            left:{xScaleTime(InterventionTime)}px;
+            visibility: {(xScaleTime(InterventionTime) < (width - padding.right)) ? 'visible':'hidden'};
+            width:2px;
+            background-color:#FFF;
+            border-right: 1px dashed black;
+            cursor:col-resize;
+            height:{height}px">            
+          </div>
+      </div>
+
+      <div style="pointer-events: none;
+                  position: absolute;
+                  top:{height+84}px;
+                  left:{0}px;
+                  width:{780}px;
+                  opacity: 1.0;
+                  height:25px;
+                  cursor:col-resize">
+            {#each milestones as milestone}
+              <div style="position:absolute; left: {xScaleTime(milestone[0])+8}px; top: -30px;">
+                <span style="opacity: 0.3"><Arrow height=30 arrowhead="#circle" dasharray = "2 1"/></span>
+                  <div class="tick" style="position: relative; left: 0px; top: 35px; max-width: 130px; color: #BBB; background-color: white; padding-left: 4px; padding-right: 4px">{@html milestone[1]}</div>
+              </div>
+            {/each}
+      </div>       
 
    </div>
 

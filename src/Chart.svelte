@@ -140,6 +140,15 @@
     stroke-dasharray: 0;
   }
 
+  .tick.tick-limit line {
+    stroke: #ee0808;
+    stroke-width: 2px;
+  }
+
+  .tick.tick-limit text {
+    fill: #ee0808;
+  }
+
   .intervention line {
     stroke: #555;
     stroke-dasharray: 0;
@@ -187,12 +196,21 @@
     <!-- y axis -->
     <g class="axis y-axis" transform="translate(0,{padding.top})">
       {#each yScale.ticks(5) as tick}
-        <g class="tick tick-{tick}" transform="translate(0, {yScale(tick) - padding.bottom})">
-          <line x2="100%"></line>
-          <text y="-4">{Number.isInteger(Math.log10(tick)) ? formatNumber(tick) : (log ? "": formatNumber(tick))}{ (tick == yScale.ticks(5)[0]) ? " ": ""}</text>
-        </g>
+        {#if tick == 10000}
+          <g class="tick tick-{tick} tick-limit" transform="translate(0, {yScale(tick) - padding.bottom})">
+            <line x2="100%"></line>
+            <text y="-18">Kapacita nemocnic</text>
+            <text y="-4">({Number.isInteger(Math.log10(tick)) ? formatNumber(tick) : (log ? "": formatNumber(tick))}{ (tick == yScale.ticks(5)[0]) ? " ": ""})</text>
+          </g>
+        {:else}
+          <g class="tick tick-{tick}" transform="translate(0, {yScale(tick) - padding.bottom})">
+            <line x2="100%"></line>
+            <text y="-4">{Number.isInteger(Math.log10(tick)) ? formatNumber(tick) : (log ? "": formatNumber(tick))}{ (tick == yScale.ticks(5)[0]) ? " ": ""}</text>
+          </g>
+        {/if}
       {/each}
     </g>
+    
 
     <!-- x axis -->
     <g class="axis x-axis">

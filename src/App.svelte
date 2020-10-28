@@ -80,7 +80,7 @@
   $: dt                = 2
   $: P_SEVERE          = 0.04
   $: duration          = 7*12*1e10
-  $: startSimulationAtDeaths = 110
+  $: startSimulationAtDeaths = 120
 
   $: state = location.protocol + '//' + location.host + location.pathname + "?" + queryString.stringify({"startSimulationAtDeaths":startSimulationAtDeaths,              
                "R0":R0,              
@@ -296,13 +296,14 @@
 
   window.addEventListener('mouseup', unlock_yaxis);
 
+  $: current_day = 11
   $: checked = [true, true, false, true, false]
   $: active  = 0
-  $: active_ = active >= 0 ? active : Iters.length - 1
+  $: active_ = active >= 0 ? active : current_day
 
   $: checked_hosp = [true, true, true, true, true, true, true, true, true, true, true]
   $: active_hosp  = 0
-  $: active_hosp_ = active_hosp >= 0 ? active_hosp : chart_Hosp.length - 1
+  $: active_hosp_ = active_hosp >= 0 ? active_hosp : current_day
 
   var Tinc_s = "\\color{#CCC}{T^{-1}_{\\text{inc}}} "
   var Tinf_s = "\\color{#CCC}{T^{-1}_{\\text{inf}}}"
@@ -1005,9 +1006,13 @@
 
 <div style="position: relative; height: 12px"></div>
 
+<p class = "center">
+  <b>Základní reprodukční číslo</b>, někdy také označovano {@html math_inline("\\mathcal{R}_0")} je dáno vlastnostmi viru, a udává kolik dalších lidí v průměru nakazí jeden infekční člověk. Toto základní reprodukční číslo lze však uměle snižovat tím, že viru bráníme v šíření, což přesně modeluje tato kalkulačka. Jak moc které opatření toto reprodukční číslo snižuje je například vidět na skvělé <a href='http://epidemicforecasting.org/containment-calculator'>stránce</a> výzkumného teamu vedeného Janem Kulveitem. 
+</p>
+
 
 <p class = "center">
-Tato kalkulačka počítá modeluje budoucí vývoj epidemie v ČR pomocí modelu <b><a href="https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#The_SEIR_model">SEIR</a> </b>(<b>S</b>usceptible → <span style="color:{colors[4]}"><b>E</b></span>xposed → <span style="color:{colors[3]}"><b>I</b></span>nfected → <span><b>R</b></span>emoved). Tento standardní epidemiologický model pracuje s čtyřmi základními skupinami obyvatel: 
+Tato kalkulačka nepracuje s oficiálními daty ministerstva zdravotnictví (až na údaj o aktuálním denním počtu úmrtí, aby byla schopna určit, v jaké fázi epidemie se nacházíme), ale počítá budoucí vývoj epidemie v ČR pomocí modelu <b><a href="https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#The_SEIR_model">SEIR</a> </b>(<b>S</b>usceptible → <span style="color:{colors[4]}"><b>E</b></span>xposed → <span style="color:{colors[3]}"><b>I</b></span>nfected → <span><b>R</b></span>emoved) a na základě známého obvyklého průběhu onemocnění v populaci. Tento standardní epidemiologický model pracuje s čtyřmi základními skupinami obyvatel: 
 
 <span>
 <ul>
